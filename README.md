@@ -48,5 +48,5 @@ just install
 just test   # run the tests
 just lint   # go vet + gofmt check
 just build  # build the binary
-just run    # run the program, e.g. just run https://www.youtube.com/@ericrosen
+just run    # run the program, e.g. just run https://www.youtube.com/@eric-rosen
 ```

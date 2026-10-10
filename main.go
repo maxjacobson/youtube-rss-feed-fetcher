@@ -39,7 +39,7 @@ Run without an argument to be prompted for the URL.
 Accepts /channel/, @handle, /c/ and /user/ style URLs.
 
 Examples:
-  youtube-rss-feed-fetcher https://www.youtube.com/@ericrosen
+  youtube-rss-feed-fetcher https://www.youtube.com/@eric-rosen
   youtube-rss-feed-fetcher https://www.youtube.com/channel/UCxxxx
 `
 
@@ -108,7 +108,7 @@ func askForURL() (string, error) {
 	url := ""
 	err := huh.NewInput().
 		Title("Channel URL").
-		Description("Paste any style of channel URL, e.g. https://www.youtube.com/@ericrosen").
+		Description("Paste any style of channel URL, e.g. https://www.youtube.com/@eric-rosen").
 		Validate(func(s string) error {
 			if strings.TrimSpace(s) == "" {
 				return errors.New("please paste a channel URL")
