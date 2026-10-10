@@ -25,6 +25,20 @@ var (
 	feedStyle   = lipgloss.NewStyle().Foreground(lipgloss.Color("12")).Underline(true)
 )
 
+// huhTheme is the Charm theme with its muted indigo field titles swapped
+// for bright cyan, which keeps better contrast on more terminals.
+var huhTheme huh.ThemeFunc = func(isDark bool) *huh.Styles {
+	styles := huh.ThemeCharm(isDark)
+	lightDark := lipgloss.LightDark(isDark)
+	cyan := lightDark(lipgloss.Color("6"), lipgloss.Color("51"))
+	styles.Focused.Title = styles.Focused.Title.Foreground(cyan)
+	styles.Focused.NoteTitle = styles.Focused.NoteTitle.Foreground(cyan)
+	styles.Blurred.Title = styles.Focused.Title
+	styles.Blurred.NoteTitle = styles.Focused.NoteTitle
+	styles.Group.Title = styles.Focused.Title
+	return styles
+}
+
 func main() {
 	if err := run(os.Args[1:]); err != nil {
 		fmt.Fprintf(os.Stderr, "youtube-rss-feed-fetcher: %v\n", err)
@@ -183,6 +197,7 @@ func askForURL() (string, error) {
 			return nil
 		}).
 		Value(&url).
+		WithTheme(huhTheme).
 		Run()
 	return strings.TrimSpace(url), err
 }
@@ -199,6 +214,7 @@ func askForPath(defaultPath string) (string, error) {
 			return nil
 		}).
 		Value(&path).
+		WithTheme(huhTheme).
 		Run()
 	return strings.TrimSpace(path), err
 }
@@ -246,6 +262,7 @@ func pickKind(kinds []youtube.Kind, channelTitle string) (youtube.Kind, error) {
 		Description("Feeds this channel doesn't publish are hidden.").
 		Options(options...).
 		Value(&kind).
+		WithTheme(huhTheme).
 		Run()
 	return kind, err
 }

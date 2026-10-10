@@ -4,7 +4,20 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+
+	"charm.land/lipgloss/v2"
 )
+
+func TestHuhThemeTitleColor(t *testing.T) {
+	dark := huhTheme.Theme(true).Focused.Title.GetForeground()
+	if dark != lipgloss.Color("51") {
+		t.Errorf("dark title color = %v, want 51", dark)
+	}
+	light := huhTheme.Theme(false).Focused.Title.GetForeground()
+	if light != lipgloss.Color("6") {
+		t.Errorf("light title color = %v, want 6", light)
+	}
+}
 
 func TestRunHelp(t *testing.T) {
 	if err := run([]string{"--help"}); err != nil {
