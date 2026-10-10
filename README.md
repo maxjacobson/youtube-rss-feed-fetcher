@@ -12,7 +12,8 @@ Run it without an argument and it will prompt you to paste a URL in.
 Pass `--write` and it will also save the feed as an OPML file, importable
 into feed readers like NetNewsWire. You're prompted for where to put it,
 defaulting to `~/Downloads/feeds.opml` (auto-incremented if that file
-already exists).
+already exists). Feeds are deduped by URL, so adding one that's already
+in the file is a no-op.
 
 It accepts any style of channel URL (`/channel/UC...`, `@handle`, `/c/`,
 `/user/`), checks which feeds the channel actually publishes (everything,
