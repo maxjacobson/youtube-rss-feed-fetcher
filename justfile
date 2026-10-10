@@ -6,9 +6,9 @@ run *args:
 test:
     go test ./...
 
-# Build the binary
+# Build the binary into bin/
 build:
-    go build -o youtube-rss-feed-fetcher .
+    go build -o bin/youtube-rss-feed-fetcher .
 
 # Lint (go vet plus a gofmt check)
 lint:
