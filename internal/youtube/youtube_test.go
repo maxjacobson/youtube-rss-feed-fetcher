@@ -15,9 +15,9 @@ func TestNormalizeURL(t *testing.T) {
 		raw  string
 		want string
 	}{
-		{"adds https", "www.youtube.com/@veritasium", "https://www.youtube.com/@veritasium"},
-		{"keeps https", "https://www.youtube.com/@veritasium", "https://www.youtube.com/@veritasium"},
-		{"keeps http", "http://www.youtube.com/@veritasium", "http://www.youtube.com/@veritasium"},
+		{"adds https", "www.youtube.com/@eric-rosen", "https://www.youtube.com/@eric-rosen"},
+		{"keeps https", "https://www.youtube.com/@eric-rosen", "https://www.youtube.com/@eric-rosen"},
+		{"keeps http", "http://www.youtube.com/@eric-rosen", "http://www.youtube.com/@eric-rosen"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -43,19 +43,19 @@ func TestChannelIDFromURL(t *testing.T) {
 		},
 		{
 			"handle URL has no channel ID",
-			"https://www.youtube.com/@veritasium",
+			"https://www.youtube.com/@eric-rosen",
 			"",
 			false,
 		},
 		{
 			"user URL has no channel ID",
-			"https://www.youtube.com/user/veritasium",
+			"https://www.youtube.com/user/eric-rosen",
 			"",
 			false,
 		},
 		{
 			"custom URL has no channel ID",
-			"https://www.youtube.com/c/veritasium",
+			"https://www.youtube.com/c/eric-rosen",
 			"",
 			false,
 		},
@@ -193,17 +193,28 @@ func TestAvailableFeeds(t *testing.T) {
 			w.WriteHeader(http.StatusBadRequest)
 			return
 		}
-		w.WriteHeader(statusByPrefix[playlistID[:4]])
+		if statusByPrefix[playlistID[:4]] != http.StatusOK {
+			w.WriteHeader(statusByPrefix[playlistID[:4]])
+			return
+		}
+		fmt.Fprint(w, `<?xml version="1.0"?>
+<feed xmlns="http://www.w3.org/2005/Atom">
+ <title>Videos</title>
+ <author><name>Eric Rosen</name></author>
+</feed>`)
 	}))
 	defer server.Close()
 
 	const id = "UCHnyfMqiRRG1u-2wmhEwi_d"
 	client := &http.Client{Transport: &redirectTransport{server: server}}
 
-	got := AvailableFeeds(id, client)
+	got, title := AvailableFeeds(id, client)
 	want := []Kind{KindEverything, KindVideos, KindLive}
 	if !slices.Equal(got, want) {
 		t.Errorf("AvailableFeeds() = %v, want %v", got, want)
+	}
+	if title != "Eric Rosen" {
+		t.Errorf("AvailableFeeds() title = %q, want %q", title, "Eric Rosen")
 	}
 }
 
@@ -240,7 +251,7 @@ func TestChannelID(t *testing.T) {
 		}))
 		defer server.Close()
 
-		got, err := ChannelID(server.URL+"/@veritasium", server.Client())
+		got, err := ChannelID(server.URL+"/@eric-rosen", server.Client())
 		if err != nil {
 			t.Fatalf("ChannelID() error = %v", err)
 		}
@@ -284,7 +295,7 @@ func TestVerifyFeed(t *testing.T) {
 	t.Run("accepts a real Atom feed", func(t *testing.T) {
 		server := startServer(`<?xml version="1.0"?>
 <feed xmlns:yt="http://www.youtube.com/xml/schemas/2015">
-  <title>Veritasium</title>
+  <title>Eric Rosen</title>
 </feed>`, http.StatusOK)
 		defer server.Close()
 

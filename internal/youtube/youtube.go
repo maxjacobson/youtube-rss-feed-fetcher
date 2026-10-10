@@ -130,46 +130,69 @@ func FeedURL(channelID string, kind Kind) string {
 }
 
 // AvailableFeeds returns the kinds of feed the channel actually publishes,
-// in menu order. The channel feed itself always exists for a valid channel;
-// the tab playlist feeds 404 when the channel has no content for that tab,
-// so they get probed. The probes run concurrently.
-func AvailableFeeds(channelID string, client *http.Client) []Kind {
-	reachable := make([]bool, len(probeKinds))
+// in menu order, along with the channel's display name (from the feed's
+// author element, empty if it couldn't be determined). The channel feed
+// itself always exists for a valid channel; the tab playlist feeds 404 when
+// the channel has no content for that tab, so they get probed. The probes
+// run concurrently.
+func AvailableFeeds(channelID string, client *http.Client) ([]Kind, string) {
+	probes := make([]feedProbe, len(probeKinds))
 	var wg sync.WaitGroup
 	for i, kind := range probeKinds {
 		wg.Add(1)
 		go func(i int, kind Kind) {
 			defer wg.Done()
-			reachable[i] = feedReachable(FeedURL(channelID, kind), client)
+			probes[i] = probeFeed(FeedURL(channelID, kind), client)
 		}(i, kind)
 	}
 	wg.Wait()
 
 	available := []Kind{KindEverything}
-	for i, ok := range reachable {
-		if ok {
+	title := ""
+	for i, probe := range probes {
+		if probe.reachable {
 			available = append(available, probeKinds[i])
+			if title == "" {
+				title = probe.title
+			}
 		}
 	}
-	return available
+	return available, title
 }
 
 var probeKinds = []Kind{KindVideos, KindShorts, KindLive}
 
-func feedReachable(feedURL string, client *http.Client) bool {
+type feedProbe struct {
+	reachable bool
+	title     string
+}
+
+func probeFeed(feedURL string, client *http.Client) feedProbe {
 	req, err := http.NewRequest(http.MethodGet, feedURL, nil)
 	if err != nil {
-		return false
+		return feedProbe{}
 	}
 	req.Header.Set("User-Agent", "Mozilla/5.0")
 
 	resp, err := client.Do(req)
 	if err != nil {
-		return false
+		return feedProbe{}
 	}
 	defer resp.Body.Close()
-	io.Copy(io.Discard, io.LimitReader(resp.Body, 4096))
-	return resp.StatusCode == http.StatusOK
+	if resp.StatusCode != http.StatusOK {
+		return feedProbe{}
+	}
+
+	var feed struct {
+		Author struct {
+			Name string `xml:"name"`
+		} `xml:"author"`
+	}
+	dec := xml.NewDecoder(io.LimitReader(resp.Body, 1<<20))
+	if err := dec.Decode(&feed); err != nil {
+		return feedProbe{reachable: true}
+	}
+	return feedProbe{reachable: true, title: feed.Author.Name}
 }
 
 // VerifyFeed checks that a feed URL responds and serves a real Atom feed.

@@ -77,9 +77,9 @@ func run(args []string) error {
 		return err
 	}
 
-	kinds := youtube.AvailableFeeds(id, client)
+	kinds, channelTitle := youtube.AvailableFeeds(id, client)
 
-	kind, err := pickKind(kinds)
+	kind, err := pickKind(kinds, channelTitle)
 	if err != nil {
 		if err == huh.ErrUserAborted {
 			os.Exit(1)
@@ -97,9 +97,13 @@ func run(args []string) error {
 		fmt.Fprintf(os.Stderr, "%s\n", warnStyle.Render("warning: couldn't copy to clipboard"))
 	}
 
+	message := "Feed copied to clipboard"
+	if channelTitle != "" {
+		message = channelTitle + " feed copied to clipboard"
+	}
 	fmt.Printf("%s %s\n%s\n",
 		successIcon,
-		titleStyle.Render("Feed copied to clipboard"),
+		titleStyle.Render(message),
 		feedStyle.Render(feed))
 	return nil
 }
@@ -120,14 +124,18 @@ func askForURL() (string, error) {
 	return strings.TrimSpace(url), err
 }
 
-func pickKind(kinds []youtube.Kind) (youtube.Kind, error) {
+func pickKind(kinds []youtube.Kind, channelTitle string) (youtube.Kind, error) {
 	kind := kinds[0]
 	options := make([]huh.Option[youtube.Kind], 0, len(kinds))
 	for _, k := range kinds {
 		options = append(options, huh.NewOption(k.Label(), k))
 	}
+	title := "Which feed?"
+	if channelTitle != "" {
+		title = "Which feed for " + channelTitle + "?"
+	}
 	err := huh.NewSelect[youtube.Kind]().
-		Title("Which feed?").
+		Title(title).
 		Description("Feeds this channel doesn't publish are hidden.").
 		Options(options...).
 		Value(&kind).

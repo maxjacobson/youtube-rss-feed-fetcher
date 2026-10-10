@@ -1,4 +1,4 @@
-# Run the program. Pass a channel URL: just run https://www.youtube.com/@veritasium
+# Run the program. Pass a channel URL: just run https://www.youtube.com/@eric-rosen
 run *args:
     go run . {{args}}
 
