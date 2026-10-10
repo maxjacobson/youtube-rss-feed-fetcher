@@ -8,8 +8,9 @@ youtube-rss-feed-fetcher https://www.youtube.com/@jamelle-bouie
 ```
 
 It accepts any style of channel URL (`/channel/UC...`, `@handle`, `/c/`,
-`/user/`), asks whether you want the feed to include Shorts, verifies that
-the feed actually responds, and puts the URL on your clipboard.
+`/user/`), checks which feeds the channel actually publishes (everything,
+videos without Shorts, Shorts only, live streams), asks which one you want,
+verifies that the feed responds, and puts the URL on your clipboard.
 
 > [!NOTE]
 > This is a vibecoded, just for fun little project. I am sure it is very
@@ -26,7 +27,10 @@ subscription features. But:
    know the `UC...` channel ID to construct it.
 2. The default feed includes Shorts, which can drown out the regular
    uploads. Swapping the `UC` prefix for `UULF` points at the channel's
-   uploads playlist feed instead, which skips Shorts.
+   uploads playlist feed instead, which skips Shorts. `UUSH` gives just
+   the Shorts and `UULV` just the live streams — but those two 404 for
+   channels without any, so the tool probes for them and only offers the
+   feeds that exist.
 
 ## Installation
 

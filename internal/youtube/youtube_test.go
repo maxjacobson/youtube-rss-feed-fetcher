@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"slices"
+	"strings"
 	"testing"
 )
 
@@ -128,29 +130,81 @@ func TestFeedURL(t *testing.T) {
 	tests := []struct {
 		name      string
 		channelID string
-		shorts    bool
+		kind      Kind
 		want      string
 	}{
 		{
-			"with shorts uses channel feed",
+			"everything uses the channel feed",
 			id,
-			true,
+			KindEverything,
 			"https://www.youtube.com/feeds/videos.xml?channel_id=" + id,
 		},
 		{
-			"without shorts swaps UC for UULF",
+			"videos swaps UC for UULF",
 			id,
-			false,
+			KindVideos,
 			"https://www.youtube.com/feeds/videos.xml?playlist_id=UULFHnyfMqiRRG1u-2wmhEwi_d",
+		},
+		{
+			"shorts swaps UC for UUSH",
+			id,
+			KindShorts,
+			"https://www.youtube.com/feeds/videos.xml?playlist_id=UUSHHnyfMqiRRG1u-2wmhEwi_d",
+		},
+		{
+			"live swaps UC for UULV",
+			id,
+			KindLive,
+			"https://www.youtube.com/feeds/videos.xml?playlist_id=UULVHnyfMqiRRG1u-2wmhEwi_d",
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if got := FeedURL(tt.channelID, tt.shorts); got != tt.want {
-				t.Errorf("FeedURL(%q, %v) = %q, want %q", tt.channelID, tt.shorts, got, tt.want)
+			if got := FeedURL(tt.channelID, tt.kind); got != tt.want {
+				t.Errorf("FeedURL(%q, %v) = %q, want %q", tt.channelID, tt.kind, got, tt.want)
 			}
 		})
 	}
+}
+
+func TestAvailableFeeds(t *testing.T) {
+	// A channel whose Videos and Live tab playlists exist, but not Shorts.
+	statusByPrefix := map[string]int{
+		"UULF": http.StatusOK,
+		"UUSH": http.StatusNotFound,
+		"UULV": http.StatusOK,
+	}
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		playlistID := r.URL.Query().Get("playlist_id")
+		if len(playlistID) < 4 {
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+		w.WriteHeader(statusByPrefix[playlistID[:4]])
+	}))
+	defer server.Close()
+
+	const id = "UCHnyfMqiRRG1u-2wmhEwi_d"
+	client := &http.Client{Transport: &redirectTransport{server: server}}
+
+	got := AvailableFeeds(id, client)
+	want := []Kind{KindEverything, KindVideos, KindLive}
+	if !slices.Equal(got, want) {
+		t.Errorf("AvailableFeeds() = %v, want %v", got, want)
+	}
+}
+
+// redirectTransport sends every request to a test server, keeping the
+// original query string.
+type redirectTransport struct {
+	server *httptest.Server
+}
+
+func (t redirectTransport) RoundTrip(req *http.Request) (*http.Response, error) {
+	cloned := req.Clone(req.Context())
+	cloned.URL.Scheme = "http"
+	cloned.URL.Host = strings.TrimPrefix(t.server.URL, "http://")
+	return http.DefaultTransport.RoundTrip(cloned)
 }
 
 func TestChannelID(t *testing.T) {
@@ -254,7 +308,7 @@ func TestVerifyFeed(t *testing.T) {
 	})
 
 	t.Run("errors when unreachable", func(t *testing.T) {
-		if err := VerifyFeed(FeedURL(id, true), &http.Client{Timeout: 1}); err == nil {
+		if err := VerifyFeed(FeedURL(id, KindEverything), &http.Client{Timeout: 1}); err == nil {
 			t.Error("VerifyFeed() should have errored")
 		}
 	})

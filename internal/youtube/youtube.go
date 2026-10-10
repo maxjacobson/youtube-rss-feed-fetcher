@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"regexp"
 	"strings"
+	"sync"
 )
 
 // ChannelIDPattern matches the UC... channel IDs YouTube uses.
@@ -83,17 +84,89 @@ func ChannelID(url string, client *http.Client) (string, error) {
 	return "", fmt.Errorf("couldn't find a channel ID at %s", url)
 }
 
-// FeedURL builds the RSS feed URL for a channel. With shorts it's the plain
-// channel feed; without, the UC prefix is swapped for UULF, which points at
-// the channel's uploads playlist feed and skips Shorts.
-func FeedURL(channelID string, shorts bool) string {
-	if shorts {
-		return "https://www.youtube.com/feeds/videos.xml?channel_id=" + channelID
+// Kind identifies one of the RSS feeds a channel publishes. The Everything
+// feed is the plain channel feed; the others are the hidden playlists
+// behind the channel's Videos, Shorts and Live tabs, addressed by swapping
+// the UC prefix of the channel ID.
+type Kind int
+
+const (
+	KindEverything Kind = iota
+	KindVideos
+	KindShorts
+	KindLive
+)
+
+// Label is the human-readable name of the feed, for pickers and menus.
+func (k Kind) Label() string {
+	switch k {
+	case KindEverything:
+		return "Everything (videos, Shorts, live)"
+	case KindVideos:
+		return "Videos only (no Shorts)"
+	case KindShorts:
+		return "Shorts only"
+	case KindLive:
+		return "Live streams only"
 	}
-	if strings.HasPrefix(channelID, "UC") {
-		channelID = "UULF" + channelID[2:]
+	return "unknown"
+}
+
+var tabPlaylistPrefixes = map[Kind]string{
+	KindVideos: "UULF",
+	KindShorts: "UUSH",
+	KindLive:   "UULV",
+}
+
+// FeedURL builds the RSS feed URL for a channel and kind of feed.
+func FeedURL(channelID string, kind Kind) string {
+	if prefix, ok := tabPlaylistPrefixes[kind]; ok && strings.HasPrefix(channelID, "UC") {
+		return "https://www.youtube.com/feeds/videos.xml?playlist_id=" + prefix + channelID[2:]
 	}
-	return "https://www.youtube.com/feeds/videos.xml?playlist_id=" + channelID
+	return "https://www.youtube.com/feeds/videos.xml?channel_id=" + channelID
+}
+
+// AvailableFeeds returns the kinds of feed the channel actually publishes,
+// in menu order. The channel feed itself always exists for a valid channel;
+// the tab playlist feeds 404 when the channel has no content for that tab,
+// so they get probed. The probes run concurrently.
+func AvailableFeeds(channelID string, client *http.Client) []Kind {
+	reachable := make([]bool, len(probeKinds))
+	var wg sync.WaitGroup
+	for i, kind := range probeKinds {
+		wg.Add(1)
+		go func(i int, kind Kind) {
+			defer wg.Done()
+			reachable[i] = feedReachable(FeedURL(channelID, kind), client)
+		}(i, kind)
+	}
+	wg.Wait()
+
+	available := []Kind{KindEverything}
+	for i, ok := range reachable {
+		if ok {
+			available = append(available, probeKinds[i])
+		}
+	}
+	return available
+}
+
+var probeKinds = []Kind{KindVideos, KindShorts, KindLive}
+
+func feedReachable(feedURL string, client *http.Client) bool {
+	req, err := http.NewRequest(http.MethodGet, feedURL, nil)
+	if err != nil {
+		return false
+	}
+	req.Header.Set("User-Agent", "Mozilla/5.0")
+
+	resp, err := client.Do(req)
+	if err != nil {
+		return false
+	}
+	defer resp.Body.Close()
+	io.Copy(io.Discard, io.LimitReader(resp.Body, 4096))
+	return resp.StatusCode == http.StatusOK
 }
 
 // VerifyFeed checks that a feed URL responds and serves a real Atom feed.

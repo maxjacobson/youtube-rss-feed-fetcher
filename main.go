@@ -60,7 +60,9 @@ func run(args []string) error {
 		return err
 	}
 
-	shorts, err := pickShorts()
+	kinds := youtube.AvailableFeeds(id, client)
+
+	kind, err := pickKind(kinds)
 	if err != nil {
 		if err == huh.ErrUserAborted {
 			os.Exit(1)
@@ -68,7 +70,7 @@ func run(args []string) error {
 		return err
 	}
 
-	feed := youtube.FeedURL(id, shorts)
+	feed := youtube.FeedURL(id, kind)
 
 	if err := youtube.VerifyFeed(feed, client); err != nil {
 		return err
@@ -85,16 +87,17 @@ func run(args []string) error {
 	return nil
 }
 
-func pickShorts() (bool, error) {
-	shorts := true
-	err := huh.NewSelect[bool]().
+func pickKind(kinds []youtube.Kind) (youtube.Kind, error) {
+	kind := kinds[0]
+	options := make([]huh.Option[youtube.Kind], 0, len(kinds))
+	for _, k := range kinds {
+		options = append(options, huh.NewOption(k.Label(), k))
+	}
+	err := huh.NewSelect[youtube.Kind]().
 		Title("Which feed?").
-		Description("Channels publish two RSS feeds; the uploads-only one skips Shorts.").
-		Options(
-			huh.NewOption("Include Shorts", true),
-			huh.NewOption("No Shorts", false),
-		).
-		Value(&shorts).
+		Description("Feeds this channel doesn't publish are hidden.").
+		Options(options...).
+		Value(&kind).
 		Run()
-	return shorts, err
+	return kind, err
 }
