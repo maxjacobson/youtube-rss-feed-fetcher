@@ -82,8 +82,8 @@ func TestChannelIDFromHTML(t *testing.T) {
 		ok   bool
 	}{
 		{
-			"embedded channelId JSON",
-			`{"channelId":"` + id + `","foo":"bar"}`,
+			"embedded externalId JSON",
+			`{"externalId":"` + id + `","foo":"bar"}`,
 			id,
 			true,
 		},
@@ -96,6 +96,19 @@ func TestChannelIDFromHTML(t *testing.T) {
 		{
 			"canonical link",
 			`<link rel="canonical" href="https://www.youtube.com/channel/` + id + `">`,
+			id,
+			true,
+		},
+		{
+			"embedded channelId JSON",
+			`{"channelId":"` + id + `","foo":"bar"}`,
+			id,
+			true,
+		},
+		{
+			"prefers page metadata over a recommended channel's channelId",
+			`{"channelId":"UC_x68cJMKc3Bjy9LFISh3Hg"}` +
+				`{"externalId":"` + id + `"}`,
 			id,
 			true,
 		},

@@ -17,9 +17,10 @@ const ChannelIDPattern = `UC[A-Za-z0-9_-]{22}`
 var (
 	channelInURLPath = regexp.MustCompile(`/channel/(` + ChannelIDPattern + `)`)
 	channelIDInHTML  = []*regexp.Regexp{
-		regexp.MustCompile(`"channelId":"(` + ChannelIDPattern + `)"`),
+		regexp.MustCompile(`"externalId":"(` + ChannelIDPattern + `)"`),
 		regexp.MustCompile(`itemprop="identifier" content="(` + ChannelIDPattern + `)"`),
 		regexp.MustCompile(`<link rel="canonical" href="[^"]*/channel/(` + ChannelIDPattern + `)"`),
+		regexp.MustCompile(`"channelId":"(` + ChannelIDPattern + `)"`),
 	}
 )
 
@@ -42,7 +43,9 @@ func ChannelIDFromURL(url string) (string, bool) {
 }
 
 // ChannelIDFromHTML scrapes a channel ID out of a rendered YouTube page,
-// for @handle, /c/ and /user/ style URLs.
+// for @handle, /c/ and /user/ style URLs. Page-level metadata (externalId,
+// itemprop, canonical link) is checked before channelId JSON blobs, which
+// can name other channels that appear in the page's recommendations.
 func ChannelIDFromHTML(html string) (string, bool) {
 	for _, re := range channelIDInHTML {
 		m := re.FindStringSubmatch(html)
