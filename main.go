@@ -28,9 +28,28 @@ func main() {
 	}
 }
 
+const usage = `Print the RSS feed URL for a YouTube channel and copy it to your clipboard.
+
+Usage:
+  youtube-rss-feed-fetcher <channel URL>
+
+Accepts /channel/, @handle, /c/ and /user/ style URLs.
+
+Examples:
+  youtube-rss-feed-fetcher https://www.youtube.com/@veritasium
+  youtube-rss-feed-fetcher https://www.youtube.com/channel/UCxxxx
+`
+
 func run(args []string) error {
+	if len(args) == 1 {
+		switch args[0] {
+		case "-h", "--help":
+			fmt.Print(usage)
+			return nil
+		}
+	}
 	if len(args) != 1 {
-		return fmt.Errorf("provide exactly one argument, a YouTube channel URL")
+		return fmt.Errorf("provide exactly one argument, a YouTube channel URL (try --help)")
 	}
 
 	url := youtube.NormalizeURL(args[0])
