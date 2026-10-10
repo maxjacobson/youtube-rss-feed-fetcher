@@ -271,6 +271,21 @@ func TestChannelID(t *testing.T) {
 		}
 	})
 
+	t.Run("reports an error status", func(t *testing.T) {
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			http.NotFound(w, r)
+		}))
+		defer server.Close()
+
+		_, err := ChannelID(server.URL, server.Client())
+		if err == nil {
+			t.Fatal("ChannelID() should have errored")
+		}
+		if !strings.Contains(err.Error(), "404") {
+			t.Errorf("ChannelID() error = %q, want it to mention the status", err)
+		}
+	})
+
 	t.Run("errors on network failure", func(t *testing.T) {
 		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {}))
 		url := server.URL

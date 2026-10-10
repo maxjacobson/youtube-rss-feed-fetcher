@@ -76,6 +76,10 @@ func ChannelID(url string, client *http.Client) (string, error) {
 	}
 	defer resp.Body.Close()
 
+	if resp.StatusCode != http.StatusOK {
+		return "", fmt.Errorf("%s returned %s", url, resp.Status)
+	}
+
 	body, err := io.ReadAll(io.LimitReader(resp.Body, 5<<20))
 	if err != nil {
 		return "", err
