@@ -1,9 +1,11 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	"net/http"
 	"os"
+	"strings"
 	"time"
 
 	"charm.land/huh/v2"
@@ -31,8 +33,9 @@ func main() {
 const usage = `Print the RSS feed URL for a YouTube channel and copy it to your clipboard.
 
 Usage:
-  youtube-rss-feed-fetcher <channel URL>
+  youtube-rss-feed-fetcher [channel URL]
 
+Run without an argument to be prompted for the URL.
 Accepts /channel/, @handle, /c/ and /user/ style URLs.
 
 Examples:
@@ -48,11 +51,25 @@ func run(args []string) error {
 			return nil
 		}
 	}
-	if len(args) != 1 {
-		return fmt.Errorf("provide exactly one argument, a YouTube channel URL (try --help)")
+	if len(args) > 1 {
+		return fmt.Errorf("provide at most one argument, a YouTube channel URL (try --help)")
 	}
 
-	url := youtube.NormalizeURL(args[0])
+	var url string
+	if len(args) == 1 {
+		url = args[0]
+	} else {
+		var err error
+		url, err = askForURL()
+		if err != nil {
+			if err == huh.ErrUserAborted {
+				os.Exit(1)
+			}
+			return err
+		}
+	}
+
+	url = youtube.NormalizeURL(url)
 	client := &http.Client{Timeout: 15 * time.Second}
 
 	id, err := youtube.ChannelID(url, client)
@@ -85,6 +102,22 @@ func run(args []string) error {
 		titleStyle.Render("Feed copied to clipboard"),
 		feedStyle.Render(feed))
 	return nil
+}
+
+func askForURL() (string, error) {
+	url := ""
+	err := huh.NewInput().
+		Title("Channel URL").
+		Description("Paste any style of channel URL, e.g. https://www.youtube.com/@veritasium").
+		Validate(func(s string) error {
+			if strings.TrimSpace(s) == "" {
+				return errors.New("please paste a channel URL")
+			}
+			return nil
+		}).
+		Value(&url).
+		Run()
+	return strings.TrimSpace(url), err
 }
 
 func pickKind(kinds []youtube.Kind) (youtube.Kind, error) {

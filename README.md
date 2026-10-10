@@ -7,6 +7,8 @@ copies it to your clipboard. Built in Go with the Charm TUI libraries.
 youtube-rss-feed-fetcher https://www.youtube.com/@jamelle-bouie
 ```
 
+Run it without an argument and it will prompt you to paste a URL in.
+
 It accepts any style of channel URL (`/channel/UC...`, `@handle`, `/c/`,
 `/user/`), checks which feeds the channel actually publishes (everything,
 videos without Shorts, Shorts only, live streams), asks which one you want,
