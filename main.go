@@ -41,7 +41,9 @@ var huhTheme huh.ThemeFunc = func(isDark bool) *huh.Styles {
 
 func main() {
 	if err := run(os.Args[1:]); err != nil {
-		fmt.Fprintf(os.Stderr, "youtube-rss-feed-fetcher: %v\n", err)
+		if !errors.Is(err, huh.ErrUserAborted) {
+			fmt.Fprintf(os.Stderr, "youtube-rss-feed-fetcher: %v\n", err)
+		}
 		os.Exit(1)
 	}
 }
@@ -111,9 +113,6 @@ func run(args []string) error {
 		var err error
 		url, err = askForURL()
 		if err != nil {
-			if err == huh.ErrUserAborted {
-				os.Exit(1)
-			}
 			return err
 		}
 	}
@@ -130,9 +129,6 @@ func run(args []string) error {
 
 	kind, err := pickKind(kinds, channelTitle)
 	if err != nil {
-		if err == huh.ErrUserAborted {
-			os.Exit(1)
-		}
 		return err
 	}
 
@@ -140,9 +136,6 @@ func run(args []string) error {
 	if opts.write {
 		opmlPath, err = askForPath(defaultOPMLPath())
 		if err != nil {
-			if err == huh.ErrUserAborted {
-				os.Exit(1)
-			}
 			return err
 		}
 	}
