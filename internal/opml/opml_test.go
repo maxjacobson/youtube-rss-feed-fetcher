@@ -110,3 +110,47 @@ func TestAddRejectsInvalidOPML(t *testing.T) {
 		t.Error("Add() should have errored on a non-OPML file")
 	}
 }
+
+func TestAddLeavesExistingFileIntactWhenWriteFails(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "feeds.opml")
+	if err := os.WriteFile(path, []byte("existing"), 0o644); err != nil {
+		t.Fatalf("writing %s: %v", path, err)
+	}
+
+	if err := os.Chmod(dir, 0o500); err != nil {
+		t.Fatalf("chmod %s: %v", dir, err)
+	}
+	t.Cleanup(func() { os.Chmod(dir, 0o700) })
+
+	if _, err := Add(path, "Eric Rosen (Videos)", "https://example.com/videos.xml"); err == nil {
+		t.Error("Add() should have errored when the directory isn't writable")
+	}
+	doc, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("reading %s: %v", path, err)
+	}
+	if string(doc) != "existing" {
+		t.Errorf("file contents = %q, want %q", doc, "existing")
+	}
+}
+
+func TestAddLeavesNoTempFilesBehind(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "feeds.opml")
+
+	if _, err := Add(path, "Eric Rosen (Videos)", "https://example.com/videos.xml"); err != nil {
+		t.Fatalf("Add() error = %v", err)
+	}
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		t.Fatalf("reading %s: %v", dir, err)
+	}
+	if len(entries) != 1 || entries[0].Name() != "feeds.opml" {
+		names := make([]string, len(entries))
+		for i, e := range entries {
+			names[i] = e.Name()
+		}
+		t.Errorf("directory entries = %v, want just feeds.opml", names)
+	}
+}

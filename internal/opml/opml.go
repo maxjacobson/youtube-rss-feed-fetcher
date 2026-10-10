@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"path/filepath"
 )
 
 const headTitle = "YouTube RSS feeds"
@@ -63,5 +64,30 @@ func Add(path, title, feedURL string) (bool, error) {
 	}
 	data = append([]byte(xml.Header), data...)
 	data = append(data, '\n')
-	return true, os.WriteFile(path, data, 0o644)
+	return true, writeFile(path, data)
+}
+
+// writeFile replaces the file at path via a temp file and rename, so a
+// crash mid-write can't destroy an existing file's contents.
+func writeFile(path string, data []byte) error {
+	dir := filepath.Dir(path)
+	tmp, err := os.CreateTemp(dir, filepath.Base(path)+".tmp")
+	if err != nil {
+		return err
+	}
+	tmpName := tmp.Name()
+	if _, err := tmp.Write(data); err != nil {
+		tmp.Close()
+		os.Remove(tmpName)
+		return err
+	}
+	if err := tmp.Close(); err != nil {
+		os.Remove(tmpName)
+		return err
+	}
+	if err := os.Chmod(tmpName, 0o644); err != nil {
+		os.Remove(tmpName)
+		return err
+	}
+	return os.Rename(tmpName, path)
 }
