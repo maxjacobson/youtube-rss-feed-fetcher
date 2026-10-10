@@ -18,6 +18,9 @@ func TestNormalizeURL(t *testing.T) {
 		{"adds https", "www.youtube.com/@eric-rosen", "https://www.youtube.com/@eric-rosen"},
 		{"keeps https", "https://www.youtube.com/@eric-rosen", "https://www.youtube.com/@eric-rosen"},
 		{"keeps http", "http://www.youtube.com/@eric-rosen", "http://www.youtube.com/@eric-rosen"},
+		{"keeps an uppercase scheme", "HTTPS://www.youtube.com/@eric-rosen", "HTTPS://www.youtube.com/@eric-rosen"},
+		{"trims whitespace", "  https://www.youtube.com/@eric-rosen \t", "https://www.youtube.com/@eric-rosen"},
+		{"trims and adds https", " www.youtube.com/@eric-rosen ", "https://www.youtube.com/@eric-rosen"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

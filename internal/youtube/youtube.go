@@ -27,12 +27,16 @@ var (
 	}
 )
 
-// NormalizeURL adds an https:// scheme if the URL is missing one.
+// NormalizeURL trims surrounding whitespace and adds an https:// scheme
+// if the URL is missing one. Scheme prefixes are matched case-insensitively
+// so an HTTP:// URL is left alone rather than double-prefixed.
 func NormalizeURL(raw string) string {
-	if !strings.HasPrefix(raw, "http://") && !strings.HasPrefix(raw, "https://") {
-		return "https://" + raw
+	trimmed := strings.TrimSpace(raw)
+	lower := strings.ToLower(trimmed)
+	if strings.HasPrefix(lower, "http://") || strings.HasPrefix(lower, "https://") {
+		return trimmed
 	}
-	return raw
+	return "https://" + trimmed
 }
 
 // ChannelIDFromURL pulls a UC... channel ID out of a /channel/ style URL,
