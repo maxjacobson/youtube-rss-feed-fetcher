@@ -283,8 +283,6 @@ func TestChannelID(t *testing.T) {
 }
 
 func TestVerifyFeed(t *testing.T) {
-	const id = "UCHnyfMqiRRG1u-2wmhEwi_d"
-
 	startServer := func(body string, status int) *httptest.Server {
 		return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			w.WriteHeader(status)
@@ -332,7 +330,11 @@ func TestVerifyFeed(t *testing.T) {
 	})
 
 	t.Run("errors when unreachable", func(t *testing.T) {
-		if err := VerifyFeed(FeedURL(id, KindEverything), &http.Client{Timeout: 1}); err == nil {
+		server := startServer("", http.StatusOK)
+		url := server.URL
+		server.Close()
+
+		if err := VerifyFeed(url, server.Client()); err == nil {
 			t.Error("VerifyFeed() should have errored")
 		}
 	})
