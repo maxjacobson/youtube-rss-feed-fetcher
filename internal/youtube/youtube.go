@@ -153,19 +153,28 @@ func FeedURL(channelID string, kind Kind) string {
 // in menu order, along with the channel's display name (from the feed's
 // author element, empty if it couldn't be determined). The channel feed
 // itself always exists for a valid channel; the tab playlist feeds 404 when
-// the channel has no content for that tab, so they get probed. The probes
-// run concurrently.
-func AvailableFeeds(channelID string, client *http.Client) ([]Kind, string) {
+// the channel has no content for that tab, so they get probed. A probe that
+// fails for any other reason (network error, unexpected status, malformed
+// feed) is returned as an error rather than mistaken for an unpublished
+// feed. The probes run concurrently.
+func AvailableFeeds(channelID string, client *http.Client) ([]Kind, string, error) {
 	probes := make([]feedProbe, len(probeKinds))
+	errs := make([]error, len(probeKinds))
 	var wg sync.WaitGroup
 	for i, kind := range probeKinds {
 		wg.Add(1)
 		go func(i int, kind Kind) {
 			defer wg.Done()
-			probes[i] = probeFeed(FeedURL(channelID, kind), client)
+			probes[i], errs[i] = probeFeed(FeedURL(channelID, kind), client)
 		}(i, kind)
 	}
 	wg.Wait()
+
+	for i, err := range errs {
+		if err != nil {
+			return nil, "", fmt.Errorf("couldn't check the %s feed: %w", probeKinds[i].ShortLabel(), err)
+		}
+	}
 
 	available := []Kind{KindEverything}
 	title := ""
@@ -177,7 +186,7 @@ func AvailableFeeds(channelID string, client *http.Client) ([]Kind, string) {
 			}
 		}
 	}
-	return available, title
+	return available, title, nil
 }
 
 var probeKinds = []Kind{KindVideos, KindShorts, KindLive}
@@ -187,20 +196,25 @@ type feedProbe struct {
 	title     string
 }
 
-func probeFeed(feedURL string, client *http.Client) feedProbe {
+// probeFeed checks whether one feed exists. A 404 means the channel doesn't
+// publish it and isn't an error; anything else that goes wrong is.
+func probeFeed(feedURL string, client *http.Client) (feedProbe, error) {
 	req, err := http.NewRequest(http.MethodGet, feedURL, nil)
 	if err != nil {
-		return feedProbe{}
+		return feedProbe{}, err
 	}
 	req.Header.Set("User-Agent", "Mozilla/5.0")
 
 	resp, err := client.Do(req)
 	if err != nil {
-		return feedProbe{}
+		return feedProbe{}, err
 	}
 	defer resp.Body.Close()
+	if resp.StatusCode == http.StatusNotFound {
+		return feedProbe{}, nil
+	}
 	if resp.StatusCode != http.StatusOK {
-		return feedProbe{}
+		return feedProbe{}, fmt.Errorf("feed returned %s", resp.Status)
 	}
 
 	var feed struct {
@@ -210,9 +224,9 @@ func probeFeed(feedURL string, client *http.Client) feedProbe {
 	}
 	dec := xml.NewDecoder(io.LimitReader(resp.Body, 1<<20))
 	if err := dec.Decode(&feed); err != nil {
-		return feedProbe{reachable: true}
+		return feedProbe{}, fmt.Errorf("%s isn't serving a valid feed: %w", feedURL, err)
 	}
-	return feedProbe{reachable: true, title: feed.Author.Name}
+	return feedProbe{reachable: true, title: feed.Author.Name}, nil
 }
 
 // VerifyFeed checks that a feed URL responds and serves a real Atom feed.

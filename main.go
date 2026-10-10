@@ -125,7 +125,10 @@ func run(args []string) error {
 		return err
 	}
 
-	kinds, channelTitle := youtube.AvailableFeeds(id, client)
+	kinds, channelTitle, err := youtube.AvailableFeeds(id, client)
+	if err != nil {
+		return err
+	}
 
 	kind, err := pickKind(kinds, channelTitle)
 	if err != nil {

@@ -181,41 +181,81 @@ func TestFeedURL(t *testing.T) {
 }
 
 func TestAvailableFeeds(t *testing.T) {
-	// A channel whose Videos and Live tab playlists exist, but not Shorts.
-	statusByPrefix := map[string]int{
-		"UULF": http.StatusOK,
-		"UUSH": http.StatusNotFound,
-		"UULV": http.StatusOK,
-	}
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		playlistID := r.URL.Query().Get("playlist_id")
-		if len(playlistID) < 4 {
-			w.WriteHeader(http.StatusBadRequest)
-			return
-		}
-		if statusByPrefix[playlistID[:4]] != http.StatusOK {
-			w.WriteHeader(statusByPrefix[playlistID[:4]])
-			return
-		}
-		fmt.Fprint(w, `<?xml version="1.0"?>
+	const id = "UCHnyfMqiRRG1u-2wmhEwi_d"
+
+	newServer := func(statusByPrefix map[string]int) *httptest.Server {
+		return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			playlistID := r.URL.Query().Get("playlist_id")
+			if len(playlistID) < 4 {
+				w.WriteHeader(http.StatusBadRequest)
+				return
+			}
+			if statusByPrefix[playlistID[:4]] != http.StatusOK {
+				w.WriteHeader(statusByPrefix[playlistID[:4]])
+				return
+			}
+			fmt.Fprint(w, `<?xml version="1.0"?>
 <feed xmlns="http://www.w3.org/2005/Atom">
  <title>Videos</title>
  <author><name>Eric Rosen</name></author>
 </feed>`)
-	}))
-	defer server.Close()
-
-	const id = "UCHnyfMqiRRG1u-2wmhEwi_d"
-	client := &http.Client{Transport: &redirectTransport{server: server}}
-
-	got, title := AvailableFeeds(id, client)
-	want := []Kind{KindEverything, KindVideos, KindLive}
-	if !slices.Equal(got, want) {
-		t.Errorf("AvailableFeeds() = %v, want %v", got, want)
+		}))
 	}
-	if title != "Eric Rosen" {
-		t.Errorf("AvailableFeeds() title = %q, want %q", title, "Eric Rosen")
-	}
+
+	t.Run("hides feeds the channel doesn't publish", func(t *testing.T) {
+		server := newServer(map[string]int{
+			"UULF": http.StatusOK,
+			"UUSH": http.StatusNotFound,
+			"UULV": http.StatusOK,
+		})
+		defer server.Close()
+
+		got, title, err := AvailableFeeds(id, &http.Client{Transport: &redirectTransport{server: server}})
+		if err != nil {
+			t.Fatalf("AvailableFeeds() error = %v", err)
+		}
+		want := []Kind{KindEverything, KindVideos, KindLive}
+		if !slices.Equal(got, want) {
+			t.Errorf("AvailableFeeds() = %v, want %v", got, want)
+		}
+		if title != "Eric Rosen" {
+			t.Errorf("AvailableFeeds() title = %q, want %q", title, "Eric Rosen")
+		}
+	})
+
+	t.Run("offers only the channel feed when no tab feeds exist", func(t *testing.T) {
+		server := newServer(map[string]int{
+			"UULF": http.StatusNotFound,
+			"UUSH": http.StatusNotFound,
+			"UULV": http.StatusNotFound,
+		})
+		defer server.Close()
+
+		got, title, err := AvailableFeeds(id, &http.Client{Transport: &redirectTransport{server: server}})
+		if err != nil {
+			t.Fatalf("AvailableFeeds() error = %v", err)
+		}
+		want := []Kind{KindEverything}
+		if !slices.Equal(got, want) {
+			t.Errorf("AvailableFeeds() = %v, want %v", got, want)
+		}
+		if title != "" {
+			t.Errorf("AvailableFeeds() title = %q, want empty", title)
+		}
+	})
+
+	t.Run("errors when a probe fails outright", func(t *testing.T) {
+		server := newServer(map[string]int{
+			"UULF": http.StatusTooManyRequests,
+			"UUSH": http.StatusOK,
+			"UULV": http.StatusOK,
+		})
+		defer server.Close()
+
+		if _, _, err := AvailableFeeds(id, &http.Client{Transport: &redirectTransport{server: server}}); err == nil {
+			t.Error("AvailableFeeds() should have errored")
+		}
+	})
 }
 
 // redirectTransport sends every request to a test server, keeping the
