@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -13,6 +14,7 @@ import (
 
 	"github.com/atotto/clipboard"
 
+	"github.com/maxjacobson/youtube-rss-feed-fetcher/internal/opml"
 	"github.com/maxjacobson/youtube-rss-feed-fetcher/internal/youtube"
 )
 
@@ -33,31 +35,64 @@ func main() {
 const usage = `Print the RSS feed URL for a YouTube channel and copy it to your clipboard.
 
 Usage:
-  youtube-rss-feed-fetcher [channel URL]
+  youtube-rss-feed-fetcher [flags] [channel URL]
 
 Run without an argument to be prompted for the URL.
 Accepts /channel/, @handle, /c/ and /user/ style URLs.
 
+Flags:
+  --write   also write the feed to an OPML file that feed readers can
+            import. You're prompted for where to save it; the default is
+            ~/Downloads/feeds.opml, incremented to feeds (1).opml etc. if
+            a file by that name already exists.
+
 Examples:
   youtube-rss-feed-fetcher https://www.youtube.com/@eric-rosen
-  youtube-rss-feed-fetcher https://www.youtube.com/channel/UCxxxx
+  youtube-rss-feed-fetcher --write https://www.youtube.com/@eric-rosen
 `
 
-func run(args []string) error {
-	if len(args) == 1 {
-		switch args[0] {
+type options struct {
+	url   string
+	write bool
+}
+
+func parseArgs(args []string) (opts options, help bool, err error) {
+	var positional []string
+	for _, arg := range args {
+		switch arg {
 		case "-h", "--help":
-			fmt.Print(usage)
-			return nil
+			help = true
+		case "--write":
+			opts.write = true
+		default:
+			if strings.HasPrefix(arg, "-") {
+				return opts, false, fmt.Errorf("unknown flag %s (try --help)", arg)
+			}
+			positional = append(positional, arg)
 		}
 	}
-	if len(args) > 1 {
-		return fmt.Errorf("provide at most one argument, a YouTube channel URL (try --help)")
+	if len(positional) > 1 {
+		return opts, false, fmt.Errorf("provide at most one argument, a YouTube channel URL (try --help)")
+	}
+	if len(positional) == 1 {
+		opts.url = positional[0]
+	}
+	return opts, help, nil
+}
+
+func run(args []string) error {
+	opts, help, err := parseArgs(args)
+	if err != nil {
+		return err
+	}
+	if help {
+		fmt.Print(usage)
+		return nil
 	}
 
 	var url string
-	if len(args) == 1 {
-		url = args[0]
+	if opts.url != "" {
+		url = opts.url
 	} else {
 		var err error
 		url, err = askForURL()
@@ -87,6 +122,17 @@ func run(args []string) error {
 		return err
 	}
 
+	var opmlPath string
+	if opts.write {
+		opmlPath, err = askForPath(defaultOPMLPath())
+		if err != nil {
+			if err == huh.ErrUserAborted {
+				os.Exit(1)
+			}
+			return err
+		}
+	}
+
 	feed := youtube.FeedURL(id, kind)
 
 	if err := youtube.VerifyFeed(feed, client); err != nil {
@@ -95,6 +141,23 @@ func run(args []string) error {
 
 	if err := clipboard.WriteAll(feed); err != nil {
 		fmt.Fprintf(os.Stderr, "%s\n", warnStyle.Render("warning: couldn't copy to clipboard"))
+	}
+
+	if opts.write {
+		name := channelTitle
+		if name == "" {
+			name = id
+		}
+		outlineTitle := name + " (" + kind.ShortLabel() + ")"
+		added, err := opml.Add(expandPath(opmlPath), outlineTitle, feed)
+		if err != nil {
+			return err
+		}
+		if added {
+			fmt.Printf("%s %s\n", successIcon, titleStyle.Render("Added to "+opmlPath))
+		} else {
+			fmt.Printf("%s %s\n", successIcon, titleStyle.Render("Already in "+opmlPath))
+		}
 	}
 
 	message := "Feed copied to clipboard"
@@ -122,6 +185,50 @@ func askForURL() (string, error) {
 		Value(&url).
 		Run()
 	return strings.TrimSpace(url), err
+}
+
+func askForPath(defaultPath string) (string, error) {
+	path := defaultPath
+	err := huh.NewInput().
+		Title("Save OPML to").
+		Description("A file feed readers can import; Enter accepts the default.").
+		Validate(func(s string) error {
+			if strings.TrimSpace(s) == "" {
+				return errors.New("please enter a file path")
+			}
+			return nil
+		}).
+		Value(&path).
+		Run()
+	return strings.TrimSpace(path), err
+}
+
+func defaultOPMLPath() string {
+	path := "~/Downloads/feeds.opml"
+	if !pathExists(path) {
+		return path
+	}
+	for i := 1; i < 100; i++ {
+		path = fmt.Sprintf("~/Downloads/feeds (%d).opml", i)
+		if !pathExists(path) {
+			return path
+		}
+	}
+	return path
+}
+
+func pathExists(path string) bool {
+	_, err := os.Stat(expandPath(path))
+	return err == nil
+}
+
+func expandPath(path string) string {
+	if path == "~" || strings.HasPrefix(path, "~/") {
+		if home, err := os.UserHomeDir(); err == nil {
+			return filepath.Join(home, path[1:])
+		}
+	}
+	return path
 }
 
 func pickKind(kinds []youtube.Kind, channelTitle string) (youtube.Kind, error) {

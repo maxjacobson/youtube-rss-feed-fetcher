@@ -115,6 +115,22 @@ func (k Kind) Label() string {
 	return "unknown"
 }
 
+// ShortLabel is a compact name for the feed, used in outline titles like
+// "Eric Rosen (Videos)".
+func (k Kind) ShortLabel() string {
+	switch k {
+	case KindEverything:
+		return "Everything"
+	case KindVideos:
+		return "Videos"
+	case KindShorts:
+		return "Shorts"
+	case KindLive:
+		return "Live streams"
+	}
+	return "unknown"
+}
+
 var tabPlaylistPrefixes = map[Kind]string{
 	KindVideos: "UULF",
 	KindShorts: "UUSH",
