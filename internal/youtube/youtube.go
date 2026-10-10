@@ -15,7 +15,10 @@ import (
 const ChannelIDPattern = `UC[A-Za-z0-9_-]{22}`
 
 var (
-	channelInURLPath = regexp.MustCompile(`/channel/(` + ChannelIDPattern + `)`)
+	// The ID must be followed by a non-ID character (or the end of the
+	// string) so a longer ID-like segment isn't silently truncated to its
+	// first 24 characters.
+	channelInURLPath = regexp.MustCompile(`/channel/(` + ChannelIDPattern + `)(?:[^A-Za-z0-9_-]|$)`)
 	channelIDInHTML  = []*regexp.Regexp{
 		regexp.MustCompile(`"externalId":"(` + ChannelIDPattern + `)"`),
 		regexp.MustCompile(`itemprop="identifier" content="(` + ChannelIDPattern + `)"`),

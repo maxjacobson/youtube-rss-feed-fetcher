@@ -42,6 +42,24 @@ func TestChannelIDFromURL(t *testing.T) {
 			true,
 		},
 		{
+			"channel URL with trailing slash",
+			"https://www.youtube.com/channel/UCHnyfMqiRRG1u-2wmhEwi_d/",
+			"UCHnyfMqiRRG1u-2wmhEwi_d",
+			true,
+		},
+		{
+			"channel URL with query params",
+			"https://www.youtube.com/channel/UCHnyfMqiRRG1u-2wmhEwi_d?si=abc",
+			"UCHnyfMqiRRG1u-2wmhEwi_d",
+			true,
+		},
+		{
+			"too-long ID doesn't get truncated",
+			"https://www.youtube.com/channel/UCHnyfMqiRRG1u-2wmhEwi_dX",
+			"",
+			false,
+		},
+		{
 			"handle URL has no channel ID",
 			"https://www.youtube.com/@eric-rosen",
 			"",
