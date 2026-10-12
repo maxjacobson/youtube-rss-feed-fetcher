@@ -53,7 +53,8 @@ const usage = `Print the RSS feed URL for a YouTube channel and copy it to your 
 Usage:
   youtube-rss-feed-fetcher [flags] [channel URL]
 
-Run without an argument to be prompted for the URL.
+Run without an argument to be prompted for the URL. After each channel
+it prompts for another; press Enter on an empty prompt to stop.
 Accepts /channel/, @handle, /c/ and /user/ style URLs.
 
 Flags:
@@ -106,19 +107,32 @@ func run(args []string) error {
 		return nil
 	}
 
-	var url string
+	client := &http.Client{Timeout: 15 * time.Second}
+
 	if opts.url != "" {
-		url = opts.url
-	} else {
-		var err error
-		url, err = askForURL()
+		return processChannel(opts.url, client, opts.write)
+	}
+
+	for {
+		url, err := askForURL()
 		if err != nil {
 			return err
 		}
+		if url == "" {
+			return nil
+		}
+		if err := processChannel(url, client, opts.write); err != nil {
+			if errors.Is(err, huh.ErrUserAborted) {
+				return err
+			}
+			fmt.Fprintf(os.Stderr, "%s\n", warnStyle.Render("warning: "+err.Error()))
+		}
+		fmt.Println()
 	}
+}
 
+func processChannel(url string, client *http.Client, write bool) error {
 	url = youtube.NormalizeURL(url)
-	client := &http.Client{Timeout: 15 * time.Second}
 
 	id, err := youtube.ChannelID(url, client)
 	if err != nil {
@@ -136,7 +150,7 @@ func run(args []string) error {
 	}
 
 	var opmlPath string
-	if opts.write {
+	if write {
 		opmlPath, err = askForPath(defaultOPMLPath())
 		if err != nil {
 			return err
@@ -153,7 +167,7 @@ func run(args []string) error {
 		fmt.Fprintf(os.Stderr, "%s\n", warnStyle.Render("warning: couldn't copy to clipboard"))
 	}
 
-	if opts.write {
+	if write {
 		name := channelTitle
 		if name == "" {
 			name = id
@@ -185,13 +199,7 @@ func askForURL() (string, error) {
 	url := ""
 	err := huh.NewInput().
 		Title("Channel URL").
-		Description("Paste any style of channel URL, e.g. https://www.youtube.com/@eric-rosen").
-		Validate(func(s string) error {
-			if strings.TrimSpace(s) == "" {
-				return errors.New("please paste a channel URL")
-			}
-			return nil
-		}).
+		Description("Paste any style of channel URL, or press Enter to stop.").
 		Value(&url).
 		WithTheme(huhTheme).
 		Run()
