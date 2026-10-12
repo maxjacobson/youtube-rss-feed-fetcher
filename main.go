@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"net/http"
 	"os"
-	"path/filepath"
 	"strings"
 	"time"
 
@@ -14,7 +13,6 @@ import (
 
 	"github.com/atotto/clipboard"
 
-	"github.com/maxjacobson/youtube-rss-feed-fetcher/internal/opml"
 	"github.com/maxjacobson/youtube-rss-feed-fetcher/internal/youtube"
 )
 
@@ -57,20 +55,12 @@ Run without an argument to be prompted for the URL. After each channel
 it prompts for another; press Enter on an empty prompt to stop.
 Accepts /channel/, @handle, /c/ and /user/ style URLs.
 
-Flags:
-  --write   also write the feed to an OPML file that feed readers can
-            import. You're prompted for where to save it; the default is
-            ~/Downloads/feeds.opml, incremented to feeds (1).opml etc. if
-            a file by that name already exists.
-
 Examples:
   youtube-rss-feed-fetcher https://www.youtube.com/@eric-rosen
-  youtube-rss-feed-fetcher --write https://www.youtube.com/@eric-rosen
 `
 
 type options struct {
-	url   string
-	write bool
+	url string
 }
 
 func parseArgs(args []string) (opts options, help bool, err error) {
@@ -79,8 +69,6 @@ func parseArgs(args []string) (opts options, help bool, err error) {
 		switch arg {
 		case "-h", "--help":
 			help = true
-		case "--write":
-			opts.write = true
 		default:
 			if strings.HasPrefix(arg, "-") {
 				return opts, false, fmt.Errorf("unknown flag %s (try --help)", arg)
@@ -110,7 +98,7 @@ func run(args []string) error {
 	client := &http.Client{Timeout: 15 * time.Second}
 
 	if opts.url != "" {
-		return processChannel(opts.url, client, opts.write)
+		return processChannel(opts.url, client)
 	}
 
 	for {
@@ -121,7 +109,7 @@ func run(args []string) error {
 		if url == "" {
 			return nil
 		}
-		if err := processChannel(url, client, opts.write); err != nil {
+		if err := processChannel(url, client); err != nil {
 			if errors.Is(err, huh.ErrUserAborted) {
 				return err
 			}
@@ -131,7 +119,7 @@ func run(args []string) error {
 	}
 }
 
-func processChannel(url string, client *http.Client, write bool) error {
+func processChannel(url string, client *http.Client) error {
 	url = youtube.NormalizeURL(url)
 
 	id, err := youtube.ChannelID(url, client)
@@ -149,14 +137,6 @@ func processChannel(url string, client *http.Client, write bool) error {
 		return err
 	}
 
-	var opmlPath string
-	if write {
-		opmlPath, err = askForPath(defaultOPMLPath())
-		if err != nil {
-			return err
-		}
-	}
-
 	feed := youtube.FeedURL(id, kind)
 
 	if err := youtube.VerifyFeed(feed, client); err != nil {
@@ -165,23 +145,6 @@ func processChannel(url string, client *http.Client, write bool) error {
 
 	if err := clipboard.WriteAll(feed); err != nil {
 		fmt.Fprintf(os.Stderr, "%s\n", warnStyle.Render("warning: couldn't copy to clipboard"))
-	}
-
-	if write {
-		name := channelTitle
-		if name == "" {
-			name = id
-		}
-		outlineTitle := name + " (" + kind.ShortLabel() + ")"
-		added, err := opml.Add(expandPath(opmlPath), outlineTitle, feed)
-		if err != nil {
-			return err
-		}
-		if added {
-			fmt.Printf("%s %s\n", successIcon, titleStyle.Render("Added to "+opmlPath))
-		} else {
-			fmt.Printf("%s %s\n", successIcon, titleStyle.Render("Already in "+opmlPath))
-		}
 	}
 
 	message := "Feed copied to clipboard"
@@ -204,51 +167,6 @@ func askForURL() (string, error) {
 		WithTheme(huhTheme).
 		Run()
 	return strings.TrimSpace(url), err
-}
-
-func askForPath(defaultPath string) (string, error) {
-	path := defaultPath
-	err := huh.NewInput().
-		Title("Save OPML to").
-		Description("A file feed readers can import; Enter accepts the default.").
-		Validate(func(s string) error {
-			if strings.TrimSpace(s) == "" {
-				return errors.New("please enter a file path")
-			}
-			return nil
-		}).
-		Value(&path).
-		WithTheme(huhTheme).
-		Run()
-	return strings.TrimSpace(path), err
-}
-
-func defaultOPMLPath() string {
-	path := "~/Downloads/feeds.opml"
-	if !pathExists(path) {
-		return path
-	}
-	for i := 1; i < 100; i++ {
-		path = fmt.Sprintf("~/Downloads/feeds (%d).opml", i)
-		if !pathExists(path) {
-			return path
-		}
-	}
-	return path
-}
-
-func pathExists(path string) bool {
-	_, err := os.Stat(expandPath(path))
-	return err == nil
-}
-
-func expandPath(path string) string {
-	if path == "~" || strings.HasPrefix(path, "~/") {
-		if home, err := os.UserHomeDir(); err == nil {
-			return filepath.Join(home, path[1:])
-		}
-	}
-	return path
 }
 
 func pickKind(kinds []youtube.Kind, channelTitle string) (youtube.Kind, error) {
